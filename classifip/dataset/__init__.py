@@ -1,4 +1,4 @@
-from . import arff
+from . import arff,genCosts
 from Orange.data import Table as OTable
 from Orange.feature.discretization import Entropy as OEnt
 from Orange.data.discretization import DiscretizeTable as DiscTable
