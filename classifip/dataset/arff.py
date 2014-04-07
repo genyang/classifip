@@ -238,7 +238,7 @@ class ArffFile(object):
             * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
         
         """
-        datasave=np.array([map(str,x) for x in self.data]).astype('|S20')
+        datasave=np.array([map(str,x) for x in self.data]).astype('|S25')
         numitem=datasave.shape[0]
         
         if discmet=='eqfreq':
@@ -517,7 +517,7 @@ class ArffFile(object):
     def __parse_data(self, l):
         l = [s.strip() for s in l.split(',')]
         if len(l) != len(self.attributes):
-            self.__print_warning("contains wrong number of values")
+#             self.__print_warning("contains wrong number of values")
             return 
 
         datum = []
