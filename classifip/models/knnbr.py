@@ -81,9 +81,11 @@ class IPKNNBR(object):
         
         #Initialize average distance for every possible class
         for i in self.classes:
-            class_set=learndataset.select_col_vals(i,['1'])
+            class_set=learndataset.select_col_vals(i,['0'])
             values=[row[0:len(row)-nblabels] for row in class_set.data]
-            if len(values) > 1000:
+            if len(values) < 2:
+                class_distances=np.array([0.1,0.1])
+            elif len(values) > 1000:
                 valred=np.random.permutation(values)[0:1000]
                 class_distances=distance.cdist(valred,valred)
             else:
@@ -91,9 +93,11 @@ class IPKNNBR(object):
             averagein=class_distances.sum()/(len(class_distances)**2
                                            -len(class_distances))
             
-            class_set=learndataset.select_col_vals(i,['0'])
+            class_set=learndataset.select_col_vals(i,['1'])
             values=[row[0:len(row)-nblabels] for row in class_set.data]
-            if len(values) > 1000:
+            if len(values) < 2:
+                class_distances=np.array([0.1,0.1])
+            elif len(values) > 1000:
                 valred=np.random.permutation(values)[0:1000]
                 class_distances=distance.cdist(valred,valred)
             else:
@@ -108,7 +112,7 @@ class IPKNNBR(object):
             
             
         
-    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3],missing=None):
+    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3],missing=None,MAR=True):
         """evaluate the instances and return a list of probability intervals
         
         :param testdataset: list of input features of instances to evaluate
@@ -147,19 +151,18 @@ class IPKNNBR(object):
                 for j in range(self.nblabels):
                     up=0.
                     down=0.
-                    randmiss=np.random.random()
                     for k in range(len(query[0])):                 
                         label_in=int(self.truelabels[query[1][k]][j])
                         expon=-((query[0][k])**(self.beta))/self.av_dist[j][label_in]
                         discount=(self.epsilon)*(exp(expon))
+                        randmiss=np.random.random()
                         if missing==None or randmiss>=missing:    
                             if label_in==1:
                                 up+=1
                                 down+=discount
                             else:
                                 up+=1-discount
-                        else:
-                            up+=1
+                        elif MAR==False: up+=1
                     resulting_score[j,0]=down
                     resulting_score[j,1]=up
                 resulting_score=resulting_score/nb_val

@@ -1,5 +1,6 @@
 from ..dataset.arff import ArffFile
 from ..representations.intervalsProbability import IntervalsProbability
+from ..representations.probadis import ProbaDis
 from ..representations.voting import Scores
 import numpy as np
 from math import exp
@@ -83,10 +84,6 @@ class NCC(object):
         :rtype: lists of :class:`~classifip.representations.intervalsProbability.IntervalsProbability` or
             lists of :class:`~classifip.representations.voting.Scores`
         .. note::
-    
-            * Probability intervals output
-                as the function returns a probability interval, interval dominance
-                is exact but maximality is not.
             
             * Precise prior
                 prior class probabilities are assumed to be precise to speed up
@@ -158,8 +155,10 @@ class NCC(object):
                         resulting_int[0,cl_index]=u_denom/(u_denom+u_numerator)
                         resulting_int[1,cl_index]=l_denom/(l_denom+l_numerator)
                     cl_index+=1
-                if maxi==False:
+                if maxi==False and s_val!=0:
                     result=IntervalsProbability(resulting_int)
+                elif maxi==False and s_val==0:
+                    result=ProbaDis(resulting_int[0,:]/resulting_int[0,:].sum())
                 else:
                     result=Scores(resulting_sc)
                 answers.append(result)

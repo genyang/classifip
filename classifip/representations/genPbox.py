@@ -1,7 +1,8 @@
 import numpy as np
+from credalset import CredalSet
 from math import fabs
 
-class GenPbox(object):
+class GenPbox(CredalSet):
     """Class of (discrete) generalized p-box: probabilistic bounds on nested
     events of a pre-ordered space. Bounds should be monotically increasing with
     a (reached) maximum of one
@@ -15,11 +16,21 @@ class GenPbox(object):
     >>> ip=array([[0.5, 0.7, 1.], [0.3, 0.5, 1.]])
     >>> from classifip.representations.genPbox import GenPbox
     >>> pbox=GenPbox(ip)
-    >>> print(GenPbox)
+    >>> print(pbox)
                      y0    y1    y2 
                --------------------
     upper bound | 0.500 0.700 1.000`
     lower bound | 0.300 0.500 1.000
+    
+    >>> pbox.getlowerprobability(subset)
+    0.5
+    >>> pbox.getupperprobability(subset)
+    0.69999999999999996
+    >>> pbox.isreachable()
+    1
+    >>> obj=array([1.,2.,3.])
+    >>> pbox.getupperexpectation(obj)
+    2.2000000000000002
     
     .. todo::
     
@@ -52,15 +63,37 @@ class GenPbox(object):
         :rtype: integer
         
         """
-    
-        #check that bounds are monotically increasing
+        #check inequality of bounds    
+        if all(x<=y for x, y in zip(self.lproba[1,:], self.lproba[0,:]))==False:
+            return 0
+        return 1
+
+    def isreachable(self):
+        """Check if generalized p-box is reachable (is coherent)
+        
+        :returns: 0 (not coherent/tight) or 1 (tight/coherent).
+        :rtype: integer
+        
+        """
+        #check that bounds are monotically increasing        
         if all(x<=y for x, y in zip(self.lproba[1,:], self.lproba[1,1:]))==False:
             return 0
         if all(x<=y for x, y in zip(self.lproba[0,:], self.lproba[0,1:]))==False:
             return 0
-        if all(x<=y for x, y in zip(self.lproba[1,:], self.lproba[0,:]))==False:
-            return 0
         return 1
+    
+    def setreachableprobability(self):
+        """Make the bounds reachable.
+        
+        """    
+        if self.isproper()==1:
+            for i in range(self.nbDecision-1):
+                if self.lproba[0,i] > self.lproba[0,i+1]:
+                    self.lproba[0,i+1]=self.lproba[0,i]
+                if self.lproba[1,i] > self.lproba[1,i+1]:
+                    self.lproba[1,i+1]=self.lproba[1,i]
+        else:
+            raise Exception('p-box inducing empty set: operation not possible')
 
     def getlowerprobability(self,subset):
         """Compute lower probability of an event expressed in binary code. 
@@ -111,7 +144,7 @@ class GenPbox(object):
         upperProbability=1-self.getlowerprobability(compsub)
         return upperProbability
     
-    def getlowerexp(self,function):
+    def getlowerexpectation(self,function):
         """Compute the lower expectation of a given (bounded) function by using
         the Choquet integral
         
@@ -136,121 +169,6 @@ class GenPbox(object):
             lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
         return lowerexpe
     
-    def getupperexp(self,function):
-        """Compute the upper expectation of a given (bounded) function by using
-        the Choquet integral
-        
-        :param function: the function values
-        :param type: np.array
-        :returns: upper expectation value
-        :rtype: float
-        """
-        if function.__class__.__name__!='ndarray':
-            raise Exception('Expecting a numpy array as argument')
-        if function.size != self.nbDecision:
-            raise Exception('number of elements incompatible with the frame size')
-        upperexpe=-self.getlowerexpectation(-function)
-        return upperexpe
-            
-    def nc_maximin_decision(self):
-        """Return the maximin classification decision (nc: no costs)
-
-        :returns: the index of the maximin class
-        :rtype: integer
-        
-        """
-        
-        decision=0
-        currentval=0
-        for i in range(self.nbDecision):
-            if i==0:
-                if max(0,self.lproba[1,i]-0) > currentval:
-                    currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-                    decision=i
-            else:
-                if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > currentval:
-                    currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-                    decision=i
-        return decision
-        
-    def nc_maximax_decision(self):
-        """Return the maximax classification decision (nc: no costs)
-        
-        :returns: the index of the maximax class
-        :rtype: integer
-        
-        """
-        
-        decision=0
-        currentval=0
-        for i in range(self.nbDecision):
-            if i==0:
-                if self.lproba[0,i]-self.lproba[1,i-1] > currentval:
-                    currentval=self.lproba[0,i]-self.lproba[1,i-1]
-                    decision=i
-            else:
-                if self.lproba[0,i]-0 > currentval:
-                    currentval=self.lproba[0,i]-self.lproba[1,i-1]
-                    decision=i
-        return decision
-        
-    def nc_hurwicz_decision(self,alpha):
-        """Return the maximax classification decision (nc: no costs)
-        
-        :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
-            and 0 (pessimistic)
-        :param type: float
-        :return: the index of the hurwicz class
-        :rtype: integer
-        
-        """
-        
-        hurwicz=np.zeros(self.nbDecision)
-        for i in range(self.nbDecision):
-            subset=np.zeros(self.nbDecision)
-            subset[i]=1
-            hurwicz[i]=alpha*self.getupperprobability(subset)+(1-alpha)*self.getlowerprobability(subset)
-        return hurwicz.argmax()
-        
-    def nc_maximal_decision(self):
-        """Return the classification decisions using maximality (nc: no costs)
-        
-        :return: the set of optimal classes (under maximality) as a 1xn vector
-            where indices of optimal classes are set to one
-        :rtype: np.array
-        
-        """
-
-        #use the fact that with no specified costs, maximality=interval_dom with this model
-        maximality_classe=self.nc_intervaldom_decision()
-        return maximality_classe
-    
-    def nc_intervaldom_decision(self):
-        """Return the classification decisions using interval dominance (nc: no costs)
-        
-        :return: the set of optimal classes (under int. dom.) as a 1xn vector
-            where indices of optimal classes are set to one
-        :rtype: :class:`~numpy.array`
-        
-        """
-        intervaldom_classe=np.ones(self.nbDecision)
-        maxlower=0
-        for i in range(self.nbDecision):
-            if i==0:
-                if max(0,self.lproba[1,i]-0) > maxlower:
-                    maxlower=max(0,self.lproba[1,i]-0)
-            else:
-                if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > maxlower:
-                    maxlower=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-        for i in range(self.nbDecision):
-            if i==0:
-                if self.lproba[0,i]-0 < maxlower:
-                        intervaldom_classe[i]=0
-            else:
-                if self.lproba[0,i]-self.lproba[1,i-1]  < maxlower:
-                        intervaldom_classe[i]=0
-        return intervaldom_classe
-
     def __str__(self):
         """Print the current bounds 
         """  
