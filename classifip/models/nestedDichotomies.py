@@ -214,13 +214,14 @@ class NestedDichotomies(bt.BinaryTree):
                 else:
                     # build the left child-node
                     codes_left = codes[1:1+length_left] #bitcodes of the left child
-                    self.left = NestedDichotomies(copy.copy(self.classifier),label=labels_node[0:codes_left.count('1')])
-                    genTree(self.left,codes_left, self.left.node.label)
+                    tree.left = NestedDichotomies(copy.copy(tree.classifier),label=labels_node[0:codes_left.count('1')])
                     
                     # build the right child-node
                     codes_right = codes[1+length_left:]
-                    self.right = NestedDichotomies(copy.copy(self.classifier),label=labels_node[codes_left.count('1'):])
-                    genTree(self.right,codes_right, self.right.node.label)
+                    tree.right = NestedDichotomies(copy.copy(tree.classifier),label=labels_node[codes_left.count('1'):])
+                    
+                    genTree(tree.left,codes_left, tree.left.node.label)
+                    genTree(tree.right,codes_right, tree.right.node.label)
                 
         if method == 'codes':
             genTree(self,codes, self.node.label)
