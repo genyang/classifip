@@ -5,7 +5,8 @@ Created on mai 2016
 '''
 from classifip.representations import binaryTree as bt
 import pickle, copy
-from classifip.representations.binaryTree import BinaryTree
+from scipy.stats import rv_discrete
+import random
 
     
 class NestedDichotomies(bt.BinaryTree):
@@ -163,29 +164,118 @@ class NestedDichotomies(bt.BinaryTree):
         return results
     
     
-    def build(self, method="random"):
+    def build(self, method="random",codes=None,shuffle=False):
         """
         Build the structure of the entire binary tree by splitting the initial
         root node (the ensemble of class values) into children nodes.
+        
+        :param method: Two methods are implemented:
+        - "random" : Generate a single random tree structure uniformly among all 
+        potential tree structures.
+        - "codes" : Given a Lukasiewicz encoding, transform the codes into a 
+        binary tree.
+        
+        :param shuffle: when using the "random method, set this paramter to True
+        will suffle the ordering of the classes (useful for multiclass problem, 
+        use with caution if the ordering has signification, e.g. ordinal classes).
+        :type shuffle: boolean
+        
+        :param codes: a chain of Lukasiewicz bit codes
+        :type codes: string
         """
+        
         if self.node.isEmpty() :
             raise Exception("Cannot split an empty root node")
         
         if (self.left is not None) or (self.right is not None) :
             raise Exception("The given root node already has child")
         
-        if self.node.count() == 1 :
-            '''
-            When there is only one class value in the label of the current node,
-            we stop splitting.
-            '''
-            self.left = None
-            self.right = None
+        #Find where ends the first (and minimal) regular prefix bit codes
+        def regular(codes):
+            psum=0
+            length=0
+            while psum <> -1: #a regular prefix code is weighted to -1
+                if length >= len(codes) : raise Exception('Bad encoding',codes)
+                if codes[length] =='0':
+                    psum += 1
+                else :
+                    psum -= 1
+                length+=1
+            
+            # return the length of the first regular prefix code 
+            return length
         
-        else :
-            l_node, r_node = self.node.splitNode(method)
-            self.left = NestedDichotomies(copy.copy(self.classifier),node = l_node)
-            self.right = NestedDichotomies(copy.copy(self.classifier),node = r_node)
-            self.left.build(method)
-            self.right.build(method) 
+        #this internal function transforms recursively a Lukasiewicz code into tree
+        def genTree(tree,codes,labels_node): 
+            if codes <> '1':
+                length_left = regular(codes[1:]) #the length of the bitcodes of the left child
+                if codes[0] <> '0':
+                    raise Exception('Bad tree-coding bit codes', codes)
+                else:
+                    # build the left child-node
+                    codes_left = codes[1:1+length_left] #bitcodes of the left child
+                    self.left = NestedDichotomies(copy.copy(self.classifier),label=labels_node[0:codes_left.count('1')])
+                    genTree(self.left,codes_left, self.left.node.label)
+                    
+                    # build the right child-node
+                    codes_right = codes[1+length_left:]
+                    self.right = NestedDichotomies(copy.copy(self.classifier),label=labels_node[codes_left.count('1'):])
+                    genTree(self.right,codes_right, self.right.node.label)
+                
+        if method == 'codes':
+            genTree(self,codes, self.node.label)
+        elif method == 'random':
+            n = len(self.node.label) - 1
+            bitcodes = ''
+            #Generate first a chain of bits of size 2n+1
+            i = 0 
+            j = 0
+            while i+j < 2*n + 1:
+                if i == n : #if n '0' are already generated, we complete by adding '1'
+                    bitcodes = bitcodes + '1'
+                    j+=1
+                elif j == n+1: #if n '1' are already generated, we complete by adding '0'
+                    bitcodes = bitcodes + '0'
+                    i+=1 
+                else : #generate the next bit
+                    proba = float(n-i)/(2*n+1-i-j) #proba of having '0' generated
+                    distrib = rv_discrete(values=((0,1),(proba,1-proba)))
+                    
+                    #generate a bit according to the defined proba distribution
+                    newbit = rv_discrete.rvs(distrib) 
+                    bitcodes = bitcodes + str(newbit)
+                    
+                    #increment i or j according to the generated bit
+                    if newbit == 0 :
+                        i+=1
+                    else:
+                        j+=1
+                    
+            
+            # find the minimum partial sum knowing '0' weights 1 and '1' weights -1
+            psum = 0
+            mini = 1
+            index_min = 0
+            for k in range(0,2*n+1):
+                psum += 1 if bitcodes[k] == '0' else -1
+                if psum < mini :
+                    mini = psum
+                    index_min = k
+            
+            if index_min < 2*n+1:
+                #form a new bitcodes starting by the element n_(index_min+1) of the old one
+                new_bitcodes = bitcodes[index_min+1:] + bitcodes[0:index_min+1]
+                #we do the same permutation with the labels
+                #----------------- index_labels = bitcodes[0:index_min+1].count('1')
+                #------- new_labels = labels[index_labels:] + labels[0:index_labels]
+            else:
+                #if the minimum is reached with the whole set, there is no permutation
+                new_bitcodes = bitcodes
     
+            #Randomize/shuffle the vector of labels if we don't want to preserve the structure of the class
+            if shuffle is True:
+                random.shuffle(self.node.label)
+            
+            genTree(self,new_bitcodes, self.node.label)
+        else:
+            raise Exception('Unrecognized method:',method)
