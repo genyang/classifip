@@ -1,1 +1,1 @@
-from . import knn, pairpip, ncc, likovo, knnbr, nccof, ordinalLogit, ordinalDelCoz, multiclassDelCoz, indetDecision
+from . import knn, pairpip, ncc, likovo, knnbr, nccof, ordinalLogit, ordinalDelCoz, multiclassDelCoz, indetDecision, nestedDichotomies
