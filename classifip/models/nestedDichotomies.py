@@ -11,10 +11,10 @@ import random
     
 class NestedDichotomies(bt.BinaryTree):
     """ NestedDichotomies is a classifier that implements the nested dichotomy 
-    binary decomposition technique [#Fox1997,#Frank2004] allowing for the 
+    binary decomposition technique [#Fox1997,#frank2004] allowing for the 
     transformation of a multi-classification problem into a set of binary ones. 
     The specific feature of this implementation is that, we allow for the 
-    treatment of interval-valued probabilities. 
+    treatment of interval-valued probabilities [#yang2014]. 
      
     :param learner: the base (binary) classifier 
     

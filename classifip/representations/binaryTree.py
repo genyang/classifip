@@ -83,18 +83,39 @@ class BinaryTree(credalset.CredalSet):
     
     >>> tree.node.proba = intprob
     
-    >>> ip2=array([[0.4, 0.5], [0.2, 0.1]])
+    >>> ip2=array([[0.5, 0.5], [0.2, 0.1]])
     >>> intprob2=IntervalsProbability(ip2)
                      y0    y1 
            --------------------
-    upper bound | 0.400 0.500
+    upper bound | 0.500 0.500
     lower bound | 0.200 0.100
     >>> tree.right.node.proba = intprob2
     >>> tree.printProba()
     ['a'] ['b', 'c']
     [0.100, 0.500] [0.100, 0.600]
         ['c']['b']
-        [0.200, 0.400] [0.100, 0.500]
+        [0.200, 0.500] [0.100, 0.500]
+        
+    >>> print tree.isreachable()
+    0
+    
+    >>> tree.setreachableprobability()
+    >>> print tree.isreachable()
+    1
+    
+    >>> tree.printProba()
+    ['a'] ['b', 'c']
+    [0.400, 0.500] [0.500, 0.600]
+        ['b']['c']
+        [0.500, 0.500] [0.500, 0.500]
+    
+    >>> tree = bt.BinaryTree(label=labels)
+    >>>  tree.build(method='codes', codes='01011', probas=[intprob,intprob2])
+    >>> tree.printProba()
+    ['a'] ['b', 'c']
+    [0.400, 0.500] [0.500, 0.600]
+        ['b']['c']
+        [0.500, 0.500] [0.500, 0.500]
     
     >>> print tree.toIntervalsProbability()
                      y0    y1    y2 
@@ -132,12 +153,12 @@ class BinaryTree(credalset.CredalSet):
         :type proba: :class:`~classifip.representations.IntervalProbabilities`
         """
    
-        def __init__(self, label=None):
+        def __init__(self, label=None,proba=None):
             """
             Constructor : create a node and associate class values to it.
             """
             self.label = label
-            self.proba = None
+            self.proba = proba
             #self.learner = ncc.NCC()
             
             
@@ -228,7 +249,7 @@ class BinaryTree(credalset.CredalSet):
         else :
             if node is None:
                 if label is None:
-                    raise Exception('No initialization information provided')
+                    raise Exception('No label information provided')
                 self.node = BinaryTree.Node(label=label)
                 self.nbDecision = self.node.count()
             else :    
@@ -241,7 +262,7 @@ class BinaryTree(credalset.CredalSet):
     
 
          
-    def build(self, method="random",codes=None,shuffle=False):
+    def build(self, method="random",codes=None,shuffle=False,probas=None):
         """
         Build the structure of the entire binary tree by splitting the initial
         root node (the ensemble of class values) into children nodes.
@@ -259,6 +280,9 @@ class BinaryTree(credalset.CredalSet):
         
         :param codes: a chain of Lukasiewicz bit codes
         :type codes: string
+        
+        :param probas: a list of probabilities to be attributed to each node
+        :type probas: list of :class:`~classifip.representations.IntervalProbabilities`
         """
         
         if self.node.isEmpty() :
@@ -266,6 +290,10 @@ class BinaryTree(credalset.CredalSet):
         
         if (self.left is not None) or (self.right is not None) :
             raise Exception("The given root node already has child")
+        
+        if probas is not None:
+            if len(probas) <> codes.count('0'):
+                raise Exception('Wrong number of probas provided, needed ', codes.count('0'))
         
         #Find where ends the first (and minimal) regular prefix bit codes
         def regular(codes):
@@ -283,25 +311,55 @@ class BinaryTree(credalset.CredalSet):
             return length
         
         #this internal function transforms recursively a Lukasiewicz code into tree
-        def genTree(tree,codes,labels_node): 
+        def genTree(tree,codes,proba_nodes=None): 
             if codes <> '1':
                 length_left = regular(codes[1:]) #the length of the bitcodes of the left child
                 if codes[0] <> '0':
                     raise Exception('Bad tree-coding bit codes', codes)
-                else:
+                elif proba_nodes is None:
                     # build the left child-node
                     codes_left = codes[1:1+length_left] #bitcodes of the left child
-                    tree.left = BinaryTree(label=labels_node[0:codes_left.count('1')])                   
+                    tree.left = BinaryTree(label=tree.node.label[0:codes_left.count('1')])               
                     
                     # build the right child-node
                     codes_right = codes[1+length_left:]
-                    tree.right = BinaryTree(label=labels_node[codes_left.count('1'):])
+                    tree.right = BinaryTree(label=tree.node.label[codes_left.count('1'):])
                     
                     genTree(tree.left,codes_left, tree.left.node.label)
                     genTree(tree.right,codes_right, tree.right.node.label)
+                else:
+                    # attribute the proba to the current node
+                    tree.node.proba = proba_nodes[0]
+                    
+                    # build the left child-node
+                    codes_left = codes[1:1+length_left] #bitcodes of the left child
+                    count_probas_left = codes_left.count('0')
+                    tree.left = BinaryTree(label=tree.node.label[0:codes_left.count('1')]) 
+                    
+                    # build the right child-node
+                    codes_right = codes[1+length_left:]
+                    count_probas_right = codes_right.count('0')
+                    tree.right = BinaryTree(label=tree.node.label[codes_left.count('1'):])
+                    
+                    
+                    if count_probas_left == 0 :
+                        genTree(tree.left,codes_left)
+                    else:
+                        genTree(tree.left,codes_left, 
+                                proba_nodes=proba_nodes[1:count_probas_left+1])   
+                    
+                    if count_probas_right == 0:
+                        genTree(tree.right,codes_right)
+                    else:
+                        genTree(tree.right,codes_right,
+                            proba_nodes=proba_nodes[1+count_probas_left:])
+                    
                 
         if method == 'codes':
-            genTree(self,codes=codes, labels_node=self.node.label)
+            if probas is None:
+                genTree(self,codes=codes)
+            else:
+                genTree(self,codes=codes, proba_nodes=probas)
         elif method == 'random':
             n = len(self.node.label) - 1
             bitcodes = ''
@@ -354,7 +412,7 @@ class BinaryTree(credalset.CredalSet):
             if shuffle is True:
                 random.shuffle(self.node.label)
             
-            genTree(self,new_bitcodes, self.node.label)
+            genTree(self,new_bitcodes)
         else:
             raise Exception('Unrecognized method:',method)
         
@@ -380,6 +438,8 @@ class BinaryTree(credalset.CredalSet):
         :rtype: :class:`~numpy.ndarray`
          
         """
+        if self.isreachable()==0:
+            self.setreachableprobability()
         
         class_values = self.node.label            
         nb_class = len(class_values)
@@ -446,7 +506,9 @@ class BinaryTree(credalset.CredalSet):
             raise Exception('Subset incompatible with the frame size')
         if not credalset.CredalSet.issubsetmask(subset):
             raise Exception('Array is not 1/0 elements')
-        
+        if self.isreachable()==0:
+            self.setreachableprobability()
+            
         return self.getlowerexpectation(function=subset)
     
     def getupperprobability(self,subset):
@@ -465,7 +527,9 @@ class BinaryTree(credalset.CredalSet):
             raise Exception('Subset incompatible with the frame size')
         if not credalset.CredalSet.issubsetmask(subset):
             raise Exception('Array is not 1/0 elements')
-        
+        if self.isreachable()==0:
+            self.setreachableprobability()
+            
         return self.getupperexpectation(function=subset)
     
     def toIntervalsProbability(self):
@@ -498,7 +562,6 @@ class BinaryTree(credalset.CredalSet):
         :rtype: integer
         
         """    
-        
         if self.left.node.count() == 1 and self.right.node.count() == 1: 
             return self.node.proba.isreachable()
         
@@ -509,20 +572,42 @@ class BinaryTree(credalset.CredalSet):
             return self.node.proba.isreachable() * self.left.node.proba.isreachable()
         
         return self.left.node.proba.isreachable() * self.right.node.proba.isreachable()
+    
+    
+    def isproper(self):
+        """Recursively check if probability intervals induce a non-empty probability set. 
         
+        :returns: 0 (empty/incur sure loss) or 1 (non-empty/avoid sure loss).
+        :rtype: integer
+        
+        """    
+        
+        if self.left.node.count() == 1 and self.right.node.count() == 1: 
+            return self.node.proba.isproper()
+        
+        if self.left.node.count() == 1:
+            return self.node.proba.isproper() * self.right.node.proba.isproper()
+        
+        if self.right.node.count() == 1:
+            return self.node.proba.isproper() * self.left.node.proba.isproper()
+        
+        return self.left.node.proba.isproper() * self.right.node.proba.isproper()
     
     def setreachableprobability(self):
         """Make the bounds of every node reachable.
         
         """  
-        if self.node.proba.isreachable() == 0:
-            self.node.proba.setreachableprobability()
+        if self.isproper() == 1:
+            if self.node.proba.isreachable() == 0:
+                self.node.proba.setreachableprobability()
+                
+            if self.right.node.count() > 1: 
+                self.right.setreachableprobability()
             
-        if self.right.node.count() > 1: 
-            self.right.setreachableprobability()
-        
-        if self.left.node.count() > 1:
-            self.left.setreachableprobability()
+            if self.left.node.count() > 1:
+                self.left.setreachableprobability()
+        else:
+            raise Exception('intervals inducing empty set: operation not possible')
         
     
     def printTree(self, _p = 0):
